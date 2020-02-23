@@ -1,14 +1,13 @@
 #------------------------------------------------------------------------------
 .SUFFIXES:
 #------------------------------------------------------------------------------
-
 ifeq ($(strip $(DEVKITARM)),)
 $(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM)
 endif
 
 include $(DEVKITARM)/ds_rules
 
-include Makefile.src
+include Makefile.inc
 
 #------------------------------------------------------------------------------
 # TARGET is the name of the output
@@ -17,29 +16,15 @@ include Makefile.src
 # INCLUDES is a list of directories containing extra header files
 #------------------------------------------------------------------------------
 TARGET		:=	$(PROGNAME)
-
-#------------------------------------------------------------------------------
-# options for code generation
-#------------------------------------------------------------------------------
-
-# note: arm9tdmi isn't the correct CPU arch, but anything newer and LD
-# *insists* it has a FPU or VFP, and it won't take no for an answer!
-CFLAGS	:=	-g -Wall -O2\
- 			-mcpu=arm9tdmi -mtune=arm9tdmi -fomit-frame-pointer\
-			-ffast-math \
-			$(ARCH)
-
-CFLAGS	+=	$(INCLUDE) -DARM9
-
-ASFLAGS	:=	-g $(ARCH)
-
-LDFLAGS	=	-g $(ARCH) 
+BUILD		:=	$(CURDIR)
+SOURCES		:=	$(CURDIR) $(CURDIR)/nds
+DATA		:=
+INCLUDES	:= $(CURDIR) $(CURDIR)/nds
 
 #------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project
 #------------------------------------------------------------------------------
-LIBS	:= 
- 
+LIBS	:= -lfat -lnds9
  
 #------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level 
@@ -53,46 +38,74 @@ LIBDIRS	:=	$(LIBNDS)
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
  
-export DEPSDIR	:=	$(CURDIR)/.deps
+export DEPSDIR	:=
+export VPATH	:=	$(SOURCES) \
+					$(foreach dir,$(DATA),$(BUILD)/$(dir))
 
- 
+export LD	:=	$(CC)
 
+BASEOBJS += main-nds.o
 
-# include Makefile.inc
+export OFILES	:=	$(BASEOBJS)
 
- 
-DEPENDS	:=	$(BASEOBJS:.o=$(CURDIR)/.d)
- 
-#------------------------------------------------------------------------------
-# main targets
-#------------------------------------------------------------------------------
+export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(dir)) \
+			$(foreach dir,$(LIBDIRS),-I$(dir)/include)
 
-# Those files aren't actually nonexistent, but we need to make
-# sure that they are always up-to-date.
-.PHONY:	$(TARGET).arm7.elf $(TARGET).arm9.elf
+export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
 #------------------------------------------------------------------------------
-$(TARGET).nds	:	$(TARGET).arm7.elf $(TARGET).arm9.elf
-	ndstool	-c $(TARGET).nds -7 $(TARGET).arm7.elf -9 $(TARGET).arm9.elf
-
-#------------------------------------------------------------------------------
-$(TARGET).arm7.elf:
-	$(MAKE) -f nds/Makefile.arm7 all
-	
+# options for code generation
 #------------------------------------------------------------------------------
 
-$(TARGET).arm9.elf:
-	$(MAKE) -f nds/Makefile.arm9 all
+ARCH	:=	-mthumb -mthumb-interwork
 
- 
- 
--include $(DEPENDS)
- 
-#------------------------------------------------------------------------------
+CFLAGS	:=	-g -Wall -O2\
+		-march=armv5te -mtune=arm946e-s \
+		-fomit-frame-pointer -ffast-math \
+		$(ARCH)
+
+CFLAGS	+=	$(INCLUDE) -DARM9
+
+ASFLAGS	:=	-g $(ARCH) -march=armv5te -mtune=arm946e-s
+LDFLAGS	=	-specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+
+.PHONY: clean all
+
+ DEPENDS	:=	$(OFILES:.o=.d)
 
 #------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr *.o $(TARGET).* 
+	@rm -fr $(OFILES) $(DEPENDS) $(TARGET).elf $(TARGET).nds
+
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# main targets
+#------------------------------------------------------------------------------
+all: $(BUILD)
+
+#------------------------------------------------------------------------------
+$(TARGET).nds	:	$(TARGET).elf
+
+$(TARGET).elf	:	$(foreach ofile,$(OFILES),$(BUILD)/$(ofile)) $(foreach ofile,$(OTHEROBJ),$(BUILD)/$(ofile))
+	@echo linking $(notdir $@)
+	@$(LD)  $(LDFLAGS) $(foreach ofile,$(OFILES),$(BUILD)/$(ofile)) \
+ 		$(foreach ofile,$(OTHEROBJ),$(BUILD)/$(ofile)) \
+ 			$(LIBPATHS) $(LIBS) -o $@
+
+$(BUILD)/%.o	:	$(SOURCES)/%.c
+	@echo $(notdir $<)
+	@$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d $(CFLAGS) -c $< -o $@
+
+#------------------------------------------------------------------------------
+# you need a rule like this for each extension you use as binary data
+#------------------------------------------------------------------------------
+%.bin.o	:	%.bin
+#------------------------------------------------------------------------------
+	@echo $(notdir $<)
+	@$(bin2o)
+
+-include $(DEPENDS)
  
- 
+#------------------------------------------------------------------------------

@@ -34,3 +34,5 @@ Release/
 # And personal copies of the vcxproj files should not be checked into the root
 /*.vcxproj*
 
+.idea/
+cmake-build-debug/
