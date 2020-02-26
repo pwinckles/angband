@@ -16,9 +16,9 @@ include Makefile.inc
 # INCLUDES is a list of directories containing extra header files
 #------------------------------------------------------------------------------
 TARGET		:=	$(PROGNAME)
-BUILD		:=	$(CURDIR)
-SOURCES		:=	$(CURDIR) $(CURDIR)/nds
-DATA		:=
+BUILD		:=	build
+SOURCES		:=	$(CURDIR)
+NDS_SRC		:=	$(CURDIR)/nds
 INCLUDES	:= $(CURDIR) $(CURDIR)/nds
 
 #------------------------------------------------------------------------------
@@ -37,19 +37,19 @@ LIBDIRS	:=	$(LIBNDS)
 # additional rules for different file extensions
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
- 
-export DEPSDIR	:=
-export VPATH	:=	$(SOURCES) \
-					$(foreach dir,$(DATA),$(BUILD)/$(dir))
+
+NDS_CFILES		:=	$(notdir $(wildcard $(NDS_SRC)/*.c))
+
+export DEPSDIR	:= $(BUILD)
+export VPATH	:=	$(SOURCES) $(NDS_SRC)
 
 export LD	:=	$(CC)
 
-BASEOBJS += main-nds.o
-
-export OFILES	:=	$(BASEOBJS)
+export OFILES	:=	$(BASEOBJS) $(NDS_CFILES:.c=.o) main-nds.o
 
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(dir)) \
-			$(foreach dir,$(LIBDIRS),-I$(dir)/include)
+			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+			-I$(CURDIR)/$(BUILD)
 
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
@@ -71,32 +71,40 @@ LDFLAGS	=	-specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 .PHONY: clean all
 
- DEPENDS	:=	$(OFILES:.o=.d)
+DEPENDS	:=	$(OFILES:.o=.d)
 
 #------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(OFILES) $(DEPENDS) $(TARGET).elf $(TARGET).nds
+	@rm -fr $(BUILD)
+	@rm $(TARGET).elf $(TARGET).nds
 
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # main targets
 #------------------------------------------------------------------------------
-all: $(BUILD)
+all: angband.nds
 
 #------------------------------------------------------------------------------
-$(TARGET).nds	:	$(TARGET).elf
+$(TARGET).nds:	$(TARGET).elf
 
-$(TARGET).elf	:	$(foreach ofile,$(OFILES),$(BUILD)/$(ofile)) $(foreach ofile,$(OTHEROBJ),$(BUILD)/$(ofile))
+$(TARGET).elf:	$(foreach ofile,$(OFILES),$(BUILD)/$(ofile)) $(foreach ofile,$(OTHEROBJ),$(BUILD)/$(ofile)) | $(BUILD)
 	@echo linking $(notdir $@)
 	@$(LD)  $(LDFLAGS) $(foreach ofile,$(OFILES),$(BUILD)/$(ofile)) \
  		$(foreach ofile,$(OTHEROBJ),$(BUILD)/$(ofile)) \
  			$(LIBPATHS) $(LIBS) -o $@
 
-$(BUILD)/%.o	:	$(SOURCES)/%.c
+$(BUILD)/%.o:	$(SOURCES)/%.c | $(BUILD)
 	@echo $(notdir $<)
 	@$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d $(CFLAGS) -c $< -o $@
+
+$(BUILD)/%.o:	$(NDS_SRC)/%.c | $(BUILD)
+	@echo $(notdir $<)
+	@$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d $(CFLAGS) -c $< -o $@
+
+$(BUILD):
+	@[ -d build ] || mkdir $(BUILD)
 
 #------------------------------------------------------------------------------
 # you need a rule like this for each extension you use as binary data

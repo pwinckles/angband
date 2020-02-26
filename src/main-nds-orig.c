@@ -40,104 +40,6 @@
 #include "nds/nds_debug.h"
 #include "nds/nds_errfont.h"
 #include "nds/nds_main.h"
-#include "nds/nds_gfx.h"
-#include "nds/nds_io.h"
-#include "nds/nds_win.h"
-
-int console_enabled = 0;
-int was_console_layer_visible = 0;
-int lid_closed = 0;
-int power_state = 0;
-int have_error = 0;
-
-// TODO the following functions might be better in a different file
-
-void mallinfo_dump();
-
-void nds_show_debug_console() {
-  was_console_layer_visible = REG_DISPCNT & DISPLAY_BG0_ACTIVE;
-
-  REG_DISPCNT_SUB |= DISPLAY_BG0_ACTIVE;
-
-  console_enabled = 1;
-}
-
-void nds_hide_debug_console() {
-  if (! was_console_layer_visible) {
-    REG_DISPCNT_SUB ^= DISPLAY_BG0_ACTIVE;
-  }
-
-  console_enabled = 0;
-}
-
-/*
- * Key interrupt handler.  Right now, I only use this to toggle the console
- * layer on and off. Triggered by pressing START + SELECT.
- */
-void keys_interrupt_handler() {
-  lid_closed = keysCurrent() & KEY_LID;
-
-  if (! console_enabled) {
-    nds_show_debug_console();
-  } else {
-    nds_hide_debug_console();
-  }
-}
-
-/*
- * Right now, the main thing we do here is check for the lid state, so we
- * can power on/off as appropriate.
- */
-void vsync_handler() {
-  switch (power_state) {
-  case POWER_STATE_ON:
-    if (lid_closed) {
-      systemSleep();
-      power_state = POWER_STATE_ASLEEP;
-    }
-
-    break;
-
-  case POWER_STATE_ASLEEP:
-    if (! lid_closed) {
-      power_state = POWER_STATE_ON;
-    }
-
-    break;
-
-  default:
-    power_state = POWER_STATE_ON;
-
-    break;
-  }
-}
-
-void nds_error() {
-  have_error = 1;
-}
-
-/*
- * Registers the following interrupt handlers:
- *
- * - START + SELECT: Toggle debug console
- * - LID: Toggle sleep mode
- */
-void enable_interrupts() {
-  irqEnable(IRQ_KEYS);
-
-  irqSet(IRQ_VBLANK, vsync_handler);
-  irqSet(IRQ_KEYS, keys_interrupt_handler);
-
-  REG_KEYCNT |= 0x8000 | 0x4000 | KEY_SELECT | KEY_START | KEY_LID;
-}
-
-
-
-
-
-
-
-
 
 u16* subfont_rgb_bin = (u16*)(0x06018400);
 u16* subfont_bgr_bin = (u16*)(0x0601C400);
@@ -162,7 +64,6 @@ byte btn_defaults[] = {
 
 const s16 mappables[] = { KEY_A, KEY_B, KEY_X, KEY_Y, KEY_SELECT, KEY_START };
 const s16 modifiers[] = { KEY_L, KEY_R };
-
 s16 nds_buttons_to_btnid(u16 kd, u16 kh) {
 	if (!(kd & NDS_MAPPABLE_MASK)) return -1;
 	u16 i, mods = 0;
@@ -191,6 +92,31 @@ u16b NDS_SCREEN_ROWS;
 #define c1(a,i)		(RGB15((a[i]>>3),(a[i+1]>>3),(a[i+2]>>3)))
 #define c2(a,i)		(RGB15((a[i+2]>>3),(a[i+1]>>3),(a[i]>>3)))
 #define TILE_BUFFER_SIZE		(TILE_WIDTH*TILE_HEIGHT*(total_tiles_used+1)*2)
+
+const nds_kbd_key row0[] = {
+  {16,(u16)'`'}, {16,(u16)'1'}, {16,(u16)'2'}, {16,(u16)'3'}, {16,(u16)'4'}, 
+  {16,(u16)'5'}, {16,(u16)'6'}, {16,(u16)'7'}, {16,(u16)'8'}, {16,(u16)'9'}, 
+  {16,(u16)'0'}, {16,(u16)'-'}, {16,(u16)'='}, {32,(u16)'\b'}, {0,0}};
+const nds_kbd_key row1[] = {
+  {24,(u16)'\t'}, {16,(u16)'q'}, {16,(u16)'w'}, {16,(u16)'e'}, {16,(u16)'r'}, 
+  {16,(u16)'t'}, {16,(u16)'y'}, {16,(u16)'u'}, {16,(u16)'i'}, {16,(u16)'o'}, 
+  {16,(u16)'p'}, {16,(u16)'['}, {16,(u16)']'}, {24,(u16)'\\'}, {0,0}};
+const nds_kbd_key row2[] = {
+  {32,K_CAPS}, {16,(u16)'a'}, {16,(u16)'s'}, {16,(u16)'d'}, {16,(u16)'f'}, 
+  {16,(u16)'g'}, {16,(u16)'h'}, {16,(u16)'j'}, {16,(u16)'k'}, {16,(u16)'l'}, 
+  {16,(u16)';'}, {16,(u16)'\''}, {32,(u16)'\n'}, {0,0}};
+const nds_kbd_key row3[] = {
+  {40,K_SHIFT}, {16,(u16)'z'}, {16,(u16)'x'}, {16,(u16)'c'}, {16,(u16)'v'}, 
+  {16,(u16)'b'}, {16,(u16)'n'}, {16,(u16)'m'}, {16,(u16)','}, {16,(u16)'.'}, 
+  {16,(u16)'/'}, {40,K_SHIFT}, {0,0}};
+const nds_kbd_key row4[] = {
+  {32,K_CTRL}, {24,K_ALT}, {128,(u16)' '}, {24,K_ALT}, {32,K_CTRL}, {0,0}};
+char shifts[] = "`~1!2@3#4$5%6^7&8*9(0)-_=+[{]}\\|;:\'\",<.>/?";
+const nds_kbd_key *kbdrows[] = {row0, row1, row2, row3, row4};
+
+
+
+
 
 /*
  * Extra data to associate with each "window"
@@ -254,7 +180,7 @@ u16b color_data[] = {
 	RGB15(  0, 31,  0), 		/* COLOUR_L_GREEN */
 	RGB15(  0, 31, 31), 		/* COLOUR_L_BLUE */
 	RGB15( 23, 15,  9)		/* COLOUR_L_UMBER */
-	/* TODO fill in more colors z-color.c */
+	/* TODO PAW fill in more colors z-color.c */
 };
 
 
@@ -291,6 +217,297 @@ static void Term_nuke_nds(term *t) {
 
 	/* XXX XXX XXX */
 }
+
+
+/*
+ * Find the square a particular pixel is part of.
+ */
+static void pixel_to_square(int * const x, int * const y,
+	const int ox, const int oy) {
+	(*x) = ox / TILE_WIDTH;
+	(*y) = oy / TILE_HEIGHT;
+}
+
+
+/*
+ * Handle a touch on the touch screen.
+ */
+static void handle_touch(int x, int y, int button, bool press) {
+	/* The co-ordinates are only used in Angband format. */
+	pixel_to_square(&x, &y, x, y);
+
+	if (press) Term_mousepress(x, y, button);
+}
+
+/*
+ * Touchscreen keyboard handling
+ */
+
+static bool shift = false, ctrl = false, alt = false, caps = false;
+
+u16b kbd_mod_code(u16 ret) {
+  if (ret & K_MODIFIER) return ret;
+  if (caps && !shift) {
+    if (ret >= 'a' && ret <= 'z') ret -= 0x20;
+  }
+  if (shift) {
+    char* temp;
+    if (!caps && ret >= 'a' && ret <= 'z') ret -= 0x20;
+    if ((temp = strchr(shifts,ret)) != NULL) ret = *(temp + 1);
+  }
+  if (alt) {
+    ret |= 0x80;
+  }
+  if (ctrl/* && ret >= 'a' && ret < 'a'+32*/) {
+    ret = ret & 0x1f;
+  }
+  return ret;
+}
+
+void kbd_set_color_from_pos(u16b r, u16b k, byte color) {
+  u16b ii, xx = 0, jj;
+  u16b *map[] = { 
+    (u16b*)(BG_MAP_RAM_SUB(8)+3*32*2), 
+    (u16b*)(BG_MAP_RAM_SUB(9)+3*32*2), 
+    (u16b*)(BG_MAP_RAM_SUB(10)+3*32*2),
+    (u16b*)(BG_MAP_RAM_SUB(11)+3*32*2) 
+  };
+  for (ii = 0; ii < k; ii++) {
+    xx += kbdrows[r][ii].width >> 3;
+  }
+  for (ii = 0; ii < (kbdrows[r][k].width>>3); ii++) {
+    for (jj = 0; jj < 4; jj++) {
+      map[jj][(10 + r * 2) * 32 + ii + xx + 1]
+        = (map[jj][(10+r*2)*32+ii+xx+1] & 0x0FFF) | (color << 12);
+      map[jj][(10 + r * 2 + 1) * 32 + ii + xx + 1]
+        = (map[jj][(10+r*2+1)*32+ii+xx+1] & 0x0FFF) | (color << 12);
+    }
+  }
+}
+
+void kbd_set_color_from_code(u16b code, byte color) {
+  u16b r,k;
+  for (r = 0; r < 5; r++) {
+    for (k = 0; kbdrows[r][k].width != 0; k++) {
+      if (kbd_mod_code(kbdrows[r][k].code) == code) {
+        kbd_set_color_from_pos(r,k,color);
+      }
+      /* do not break!! there may be >1 key with this code (modifier keys) */
+    }
+  }
+}
+
+void kbd_set_map() {
+  REG_BG0CNT_SUB = BG_TILE_BASE(0) | BG_MAP_BASE(8 + (caps | (shift<<1))) | BG_PRIORITY(0) | BG_COLOR_16;
+  
+}
+
+u16b kbd_xy2key(byte x, byte y) {
+  if (x >= 104 && x < 152 && y >=24 && y < 72) {	/* on arrow-pad */
+    byte kx = (x-104)/16, ky = (y-24)/16;
+    return (kx + (2 - ky) * 3 + 1 + '0')/* | (shift ? K_SHIFTED_MOVE : 0)*/;
+
+  }
+  if (y >=80 && y < 96) {
+    if (x >= 8 && x < 24) return '\033';
+    if (x >= 40 && x < 248) {	/* F-key */
+      x -= 40;
+      y = x/72;	/* which section */
+      x -= y*72;	/* offset in section */
+      if (x < 64) {
+        return K_F(y*4+(x>>4)+1);	/* section*4 + offset/16 + 1 */
+      } else {
+        return 0;
+      }
+    }
+  }
+
+  s16b ox = x - 8, oy = y-104;
+  if (ox < 0 || ox >= 240) return 0;
+  if (oy < 0 || oy >= 80) return 0;
+  u16b row = oy / 16;
+  int i;
+  for (i = 0; ox > 0; ox -= kbdrows[row][i++].width);
+  u16b ret = kbdrows[row][i-1].code;
+  return kbd_mod_code(ret);
+}
+
+void kbd_dotoggle(bool *flag, int how) {
+  switch (how) {
+    case 0: *flag = false; return;
+    case 1: *flag = true; return;
+    default:
+    case -1: *flag = !*flag; return;
+  }
+}
+
+/* which: K_SHIFT, K_CTRL, K_ALT, K_MODIFIER=all keys */
+/* how: -1 = toggle, 0 = off, 1 = on */
+void kbd_togglemod(int which, int how) {
+  /*boolean old_shift = shift, old_ctrl = ctrl, old_alt = alt, old_caps = caps; */
+  switch (which) {
+    case K_CTRL: kbd_dotoggle(&ctrl,how); break;
+    case K_SHIFT: kbd_dotoggle(&shift,how); break;
+    case K_ALT: kbd_dotoggle(&alt,how); break;
+    case K_CAPS: kbd_dotoggle(&caps,how); break;
+    case K_MODIFIER:
+      kbd_dotoggle(&ctrl,how);
+      kbd_dotoggle(&shift,how);
+      kbd_dotoggle(&alt,how);
+      /* NOT caps!!  This is called to un-set shift, ctrl, and alt after */
+      /* a key is pressed.  Unsetting caps here would cause it to be the */
+      /* same as shift. */
+      break;
+    }
+  
+  /* if (old_shift != shift) */
+  kbd_set_color_from_code(K_SHIFT,shift);
+  
+  /* if (old_ctrl != ctrl) */
+  kbd_set_color_from_code(K_CTRL,ctrl);
+
+  /* if (old_alt != alt) */
+  kbd_set_color_from_code(K_ALT,alt);
+
+  /* if (old_caps != caps) */
+  kbd_set_color_from_code(K_CAPS,caps);
+
+  kbd_set_map();
+}
+
+
+/* clear this to prevent alt-b, f5, and f6 from having their special effects */
+/* it's cleared during getlin, yn_function, etc */
+byte process_special_keystrokes = 1;
+
+/* run this every frame */
+/* returns a key code if one has been typed, else returns 0 */
+/* assumes scankeys() was already called this frame (in real vblank handler) */
+byte kbd_vblank() {
+  /* frames the stylus has been held down for */
+  static u16b touched = 0;
+  /* coordinates from each frame, the median is used to get the keycode */
+  static s16b xarr[3],yarr[3];
+  /* the keycode of the last key pressed, so it can be un-highlighted */
+  static u16b last_code;
+  /* the keycode of the currently pressed key, is usu. returned */
+  u16b keycode;
+  /* current input data */
+  touchPosition touch;
+
+  touchRead(&touch);
+  
+  /* if screen is being touched... */
+  if (keysHeld() & KEY_TOUCH) {
+    if (touched < 3) {	/* if counter < 3... */
+      touched++;				/* add to counter */
+      xarr[touched-1] = touch.px;	/* add this to the array for */
+      yarr[touched-1] = touch.py;	/* finding the median */
+    }
+  } else {	/* not being touched */
+    touched = 0;	/* so reset the counter for next time */
+  }
+  
+  /* if the stylus was released */
+  if (keysUp() & KEY_TOUCH) {
+    /* if last_code is set and it wasn't a modifier */
+    if (last_code && !(last_code & K_MODIFIER)) {
+      /* clear the hiliting on this key */
+      kbd_set_color_from_code(last_code,0);
+      /* and also clear all modifiers (except caps)    */
+      kbd_togglemod(K_MODIFIER, 0);
+    }
+    last_code = 0;
+  }
+  
+  /* if the screen has been touched for 3 frames... */
+  if (touched == 3) {
+    touched++;	/* do not return the keycode again */
+    /* also, not setting to zero prevents the keysHeld() thing */
+    /*  from starting the process over and getting 3 more samples */
+
+    u16b i, tmp, the_x=0, the_y=0;
+
+    /* x/yarr now contains 3 values from each of the 3 frames */
+    /* take the median of each array and put into the_x/y */
+
+    /* sort the array */
+    /* bubble sort, ugh */
+    for (i = 1; i < 3; i++) {
+      if (xarr[i] < xarr[i-1]) {
+        tmp = xarr[i];
+        xarr[i] = xarr[i-1];
+        xarr[i-1] = tmp;
+      }
+      if (yarr[i] < yarr[i-1]) {
+        tmp = yarr[i];
+        yarr[i] = yarr[i-1];
+        yarr[i-1] = tmp;
+      }
+    }
+
+    /* get the middle value (median) */
+    /* if it's -1, take the top value */
+    if (xarr[1] == -1) the_x = xarr[2];
+    else the_x = xarr[1];
+    if (yarr[1] == -1) the_y = yarr[2];
+    else the_y = yarr[1];
+
+    /* get the keycode that corresponds to this key */
+    u16b keycode = kbd_xy2key(the_x, the_y);
+
+    /* if it's not a modifier, highlight it */
+    if (keycode && !(keycode & K_MODIFIER)) {
+      kbd_set_color_from_code(keycode, 1);
+    }
+    /* set last_code so it can be un-highlighted later */
+    last_code = keycode;
+
+    /*/* check for special keystrokes: alt-b, f5, f6 */
+    if (process_special_keystrokes) {
+      /* alt-b: assign button macro */
+      if (keycode == ('b' | 0x80)) {
+        /* clear hiliting */
+        kbd_set_color_from_code(keycode,0);
+        kbd_togglemod(K_MODIFIER,0);
+        //nds_assign_button();
+        keycode = last_code = 0;	/* don't let nethack process it */
+      }
+
+      if (keycode & K_F(0)) {	/* its an f-key */
+        if (keycode == K_F(5)) {	/* F5: toggle to text mode */
+          //nds_ascii_graphics = ~nds_ascii_graphics;
+          //iflags.use_color = nds_ascii_graphics;
+          /*doredraw(); */
+          keycode = 'R' & 0x1F;	/* send a redraw command to nethack */
+          last_code = 0;
+        } else if (keycode == K_F(6)) {	/* F6: toggle top font */
+          swap_font(false);
+          nds_updated = 0xFF;
+          if (access("/NetHack/swapfont",04)!= -1) {
+            unlink("/NetHack/swapfont");
+          } else {
+            FILE* f = fopen("/NetHack/swapfont","w");
+            fwrite(&f,4,1,f);	/* otherwise FileExists doesnt work */
+            fclose(f);
+          }
+          keycode = last_code = 0;
+        }
+        kbd_togglemod(K_MODIFIER,0);
+      }
+    }
+
+    /* if it's a modifier, toggle it */
+    if (keycode & K_MODIFIER) {
+      kbd_togglemod(keycode,-1);
+    } else if ((keycode & 0x7F) != 0) {	/* it's an actual keystroke, return it */
+      return (keycode & 0xFF);
+    }
+  }
+  
+  return 0;
+}
+
 
 void nds_check_buttons(u16b kd, u16b kh) {
   s16b btn = nds_buttons_to_btnid(kd,kh);
@@ -382,7 +599,11 @@ void do_vblank() {
   
   /* --------------------------- */
   /*  Check for typing on the touchscreen kbd */
-  // TODO code of checking keyboard
+  byte keycode = kbd_vblank();
+  if ((keycode & 0x7F) != 0) {	/* it's an actual keystroke, return it */
+    put_key_event(keycode & 0xFF);
+    /*Term_keypress(keycode & 0xFF); */
+  }
 }
 
 /*END JUST MOVED */
@@ -405,7 +626,6 @@ static errr CheckEvents(bool wait) {
   if (!wait && !has_event()) return (1);
 
   while (!e) {
-    // TODO need to get touch events in here
     e = get_event();
 
     do_vblank();
@@ -413,8 +633,7 @@ static errr CheckEvents(bool wait) {
 
   /* Mouse */
   if (IS_MEVENT(e)) {
-    // TODO handle keyboard
-//    handle_touch(EVENT_X(e) + 1, EVENT_Y(e), 1, true);
+    handle_touch(EVENT_X(e) + 1, EVENT_Y(e), 1, true);
   } else if ((EVENT_C(e) & 0x7F) == 0) {
     /* Undefined */
     return (1);
@@ -626,7 +845,6 @@ void draw_char(byte x, byte y, char c) {
   u32b vram_offset = (y & 0x1F) * 8 * 256 + x * 3, tile_offset = c * 24;
   u16b* fb = BG_GFX;
   const u16b* chardata = top_font_bin;
-  // TODO what is this doing?
   if (y & 32) {
     fb = &BG_GFX_SUB[16 * 1024];
     chardata = btm_font_bin;
@@ -641,23 +859,22 @@ void draw_char(byte x, byte y, char c) {
 }
 
 void draw_color_char(byte x, byte y, char c, byte clr) {
-  u32b vram_offset = (y & 0x1F) * 8 * 256 + x * 3, tile_offset = c * 24;
-  u16b* fb = BG_GFX;
-  const u16b* chardata = top_font_bin;
-  // TODO what is this doing?
-  if (y & 32) {
+	u32b vram_offset = (y & 0x1F) * 8 * 256 + x * 3, tile_offset = c * 24;
+	u16b* fb = BG_GFX;
+	const u16b* chardata = top_font_bin;
+	if (y & 32) {
     fb = &BG_GFX_SUB[16*1024];
     chardata = btm_font_bin;
   }
-  byte xx, yy;
-  u16b val;
-  u16b fgc = color_data[clr & 0xF];
-  for (yy = 0; yy < 8; yy++) {
-    for (xx = 0;xx < 3; xx++) {
-      val = (chardata[yy * 3 + xx + tile_offset]);
-      fb[yy * 256 + xx + vram_offset] = (val & fgc) | BIT(15);
-    }
-  }
+	byte xx, yy;
+	u16b val;
+	u16b fgc = color_data[clr & 0xF];
+	for (yy = 0; yy < 8; yy++) {
+		for (xx = 0;xx < 3; xx++) {
+			val = (chardata[yy * 3 + xx + tile_offset]);
+			fb[yy * 256 + xx + vram_offset] = (val & fgc) | BIT(15);
+		}
+	}
 }
 
 /*
@@ -920,16 +1137,16 @@ errr init_nds(void) {
  * This function is used to keep the "path" variable off the stack.
  */
 static void init_stuff(void) {
-  char path[1024];
+	char path[1024];
 
-  /* Prepare the path */
-  strcpy(path, "/angband/lib/");
+	/* Prepare the path */
+	strcpy(path, "/angband/lib/");
 
-  /* Prepare the filepaths */
-  init_file_paths(path, path, path);
+	/* Prepare the filepaths */
+	init_file_paths(path, path, path);
 
-  /* Hack */
-  //strcpy(savefile, "/angband/lib/save/PLAYER");
+	/* Hack */
+	//strcpy(savefile, "/angband/lib/save/PLAYER");
 }
 
 void nds_init_fonts() {
@@ -987,6 +1204,38 @@ bool nds_load_file(const char* name, u16b* dest, u32b len) {
   return true;
 }
 
+bool nds_load_kbd() {
+#define NUM_FILES	3
+  const char *files[] = 
+    {
+      "kbd.bin","kbd.pal","kbd.map",
+    };
+  const u16b* dests[] = 
+    {
+      (u16b*)BG_TILE_RAM_SUB(0), BG_PALETTE_SUB, (u16*)BG_MAP_RAM_SUB(8),
+    };
+  
+  char buf[64] = "\0";
+  u16b i;
+  for (i = 0; i < NUM_FILES; i++) {
+    if (!nds_load_file(files[i], dests[i], 0)) {
+	    sprintf(buf,"Error opening %s (errno=%d)\n",files[i],errno);
+	    nds_fatal_err(buf);
+	    return false;
+    }
+  }
+#undef NUM_FILES
+  
+  return true;
+}
+
+void kbd_init() {
+  u16b i;
+  for (i = 0; i < 16; i++) {
+    BG_PALETTE_SUB[i+16] = BG_PALETTE_SUB[i] ^ 0x7FFF;
+  }
+}
+
 void nds_init_buttons() {
   u16b i, j;
   for (i = 0; i < (NDS_NUM_MAPPABLE << NDS_NUM_MODIFIER); i++) {
@@ -1013,6 +1262,20 @@ void swap_font(bool bottom)
       if (btm_font_bin == subfont_rgb_bin) btm_font_bin = subfont_bgr_bin;
       else btm_font_bin = subfont_rgb_bin;
     }
+}
+
+/* on_irq, do nothing */
+void on_irq() {
+  REG_IME = 0;
+  if (REG_IF & IRQ_VBLANK) {
+      /* Tell the DS we handled the VBLANK interrupt */
+      INTR_WAIT_FLAGS |= IRQ_VBLANK;
+      REG_IF |= IRQ_VBLANK;
+  } else {
+    /* Ignore all other interrupts */
+    REG_IF = REG_IF;
+  }
+  REG_IME=1;
 }
 
 void nds_raw_print(const char* str) {
@@ -1043,14 +1306,6 @@ static void hook_plog(const char *str) {
     }
 }
 
-void nds_exit(int code) {
-  u16b i;
-  for (i = 0; i < 60; i++) {
-    nds_updated = 0xFF;
-    do_vblank();	/* wait 1 sec. */
-  }
-  systemShutDown();
-}
 
 /*
  * Display error message and quit (see "z-util.c")
@@ -1069,36 +1324,35 @@ static void hook_quit(const char *str) {
   nds_exit(0);
 }
 
+
+void nds_exit(int code) {
+  u16b i;
+  for (i = 0; i < 60; i++) {
+    nds_updated = 0xFF;
+    do_vblank();	/* wait 1 sec. */
+  }
+  systemShutDown();
+}
+
+
 /*
  * Main function
  *
  * This function must do a lot of stuff.
  */
 int main(int argc, char *argv[]) {
+  int i;
+
   /* Initialize the machine itself  */
 
-  srand(time(NULL));
+  powerOn(POWER_ALL_2D | POWER_SWAP_LCDS);
 
-  enable_interrupts();
-
-  consoleDemoInit();
-
-  DEBUG_PRINT("Debug testing!\n");
-
-//  nds_show_debug_console();
-
-  Keyboard *kbd = keyboardDemoInit();
-  keyboardShow();
-
-  // TODO handler for key events
-//  kbd->OnKeyPressed = OnKeyPressed;
-
-
-  // TODO perhaps change later -- MODE_0 DISPLAY_0 is probably fine
   videoSetMode(MODE_5_2D | DISPLAY_BG2_ACTIVE);
+  videoSetModeSub(MODE_5_2D | DISPLAY_BG0_ACTIVE | DISPLAY_BG2_ACTIVE);
 
   vramSetBankA(VRAM_A_MAIN_BG_0x06000000); /* BG2, event buf, fonts */
   vramSetBankB(VRAM_B_MAIN_BG_0x06020000);       /* for storage (tileset) */
+  vramSetBankC(VRAM_C_SUB_BG_0x06200000);
   vramSetBankD(VRAM_D_MAIN_BG_0x06040000);       /* for storage (tileset) */
   vramSetBankE(VRAM_E_LCD);	/* for storage (WIN_TEXT) */
   vramSetBankF(VRAM_F_LCD);	/* for storage (WIN_TEXT) */
@@ -1111,8 +1365,31 @@ int main(int argc, char *argv[]) {
   REG_BG2Y = 0;
   REG_BG2X = 0;
 
+  REG_BG0CNT_SUB = BG_TILE_BASE(0) | BG_MAP_BASE(8) | BG_PRIORITY(0) | BG_COLOR_16;
+
+  REG_BG2CNT_SUB = BG_BMP16_256x256 | BG_BMP_BASE(2);
+  REG_BG2PA_SUB = 1<<8;
+  REG_BG2PB_SUB = 0;
+  REG_BG2PC_SUB = 0;
+  REG_BG2PD_SUB = 1<<8;
+  REG_BG2Y_SUB = 0;
+  REG_BG2X_SUB = 0;
+  
+  /* Enable the V-blank interrupt */
+  REG_IME = 0;
+  IRQ_HANDLER = on_irq;
+  REG_IE = IRQ_VBLANK;
+  REG_IF = ~0;
+  REG_DISPSTAT = DISP_VBLANK_IRQ;
+  REG_IME = 1;
+
   nds_init_fonts();
   
+  swiWaitForVBlank();
+  swiWaitForVBlank();
+  swiWaitForVBlank();
+  swiWaitForVBlank();
+  swiWaitForVBlank();
   swiWaitForVBlank();
   
   if (!fatInitDefault()) {
@@ -1124,20 +1401,47 @@ int main(int argc, char *argv[]) {
   }
   
   swiWaitForVBlank();
+  swiWaitForVBlank();
+  swiWaitForVBlank();
+  swiWaitForVBlank();
   
   chdir("/angband");
 
+  if (!nds_load_kbd()) 
+    {
+      nds_fatal_err("\nError loading keyboard graphics.\nCannot continue.\n");
+      return 1;	/* die */
+    }
+  kbd_init();
   nds_init_buttons();
+
+//  fifoSendValue32(IPC_NDS_TYPE, 0);	/* to arm7: everything has init'ed */
+//  fifoWaitValue32(IPC_NDS_TYPE);	/* wait for response about the NDS type */
+//
+//  if (fifoGetValue32(IPC_NDS_TYPE) == 1)
+//    {	/* it's a DS lite */
+//      swap_font(false);
+//    }
+//  else if (access("/angband/swapfont",04) != -1)
+//    {
+//      swap_font(false);
+//    }
 
   TILE_HEIGHT = 8;
   TILE_WIDTH = 3;
+
+//    nds_raw_print("1");
 
   /* Activate hooks */
   plog_aux = hook_plog;
   quit_aux = hook_quit;
 
+//    nds_raw_print("2");
+
   /* Initialize the windows */
   if (init_nds()) quit("Oops!");
+
+//    nds_raw_print("3");
 
   /* XXX XXX XXX */
   ANGBAND_SYS = "nds";
@@ -1145,31 +1449,30 @@ int main(int argc, char *argv[]) {
   /* Initialize some stuff */
   init_stuff();
 
+//  nds_raw_print("4");
+
   draw_tile(2, 2, 5);
   draw_tile(4, 2, 15);
   draw_tile(6, 2, 25);
   draw_tile(8, 2, 35);
 
+//  nds_raw_print("5");
+
   while (true) {
-      DEBUG_PRINT("Before init_angband()\n");
+//      nds_raw_print("6");
       /* Initialize */
       init_angband();
-      DEBUG_PRINT("After init_angband()\n");
-
-      for (int i = 0; i < 50; i++) {
+//      nds_raw_print("7");
+      for (i = 0; i < 50; i++) {
         draw_tile(i % 10, i / 10, i + 600);
       }
       /* Wait for response */
-
-      DEBUG_PRINT("Before pause_line()\n");
+//      nds_raw_print("8");
       pause_line(Term);
-      DEBUG_PRINT("After pause_line()\n");
-
-      DEBUG_PRINT("Before play_game()\n");
+//      nds_raw_print("9");
       /* Play the game */
       play_game(true);
-      DEBUG_PRINT("After play_game()\n");
-
+//      nds_raw_print("10");
       /* Free resources */
       cleanup_angband();
   }
