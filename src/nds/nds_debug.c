@@ -20,3 +20,16 @@ void nds_debug_print(char *file, int line, char *fmt, ...)
 
   va_end(ap);
 }
+
+void nds_info_print(char *fmt, ...)
+{
+  char buffer[1024];
+  va_list ap;
+
+  va_start(ap, fmt);
+
+  sprintf(buffer, "%s", fmt);
+  viprintf(buffer, ap);
+
+  va_end(ap);
+}

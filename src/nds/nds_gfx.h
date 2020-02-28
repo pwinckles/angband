@@ -16,8 +16,8 @@ extern u16b* subfont_bgr_bin;	// rambank D + font_rgb(16k)
 extern int total_tiles_used;
 // y + 32 = draw on subscreen
 void draw_tile(byte x, byte y, u16b tile);
-void draw_char(byte x, byte y, char c);
-void draw_color_char(byte x, byte y, char c, byte clr);
+void draw_char(byte x, byte y, wchar_t c);
+void draw_color_char(byte x, byte y, wchar_t c, byte clr);
 void draw_curs(byte x, byte y);
 void render_all_windows();
 void nds_init_fonts();

@@ -52,8 +52,6 @@ int have_error = 0;
 
 // TODO the following functions might be better in a different file
 
-void mallinfo_dump();
-
 void nds_show_debug_console() {
   was_console_layer_visible = REG_DISPCNT & DISPLAY_BG0_ACTIVE;
 
@@ -177,17 +175,11 @@ s16 nds_buttons_to_btnid(u16 kd, u16 kh) {
 
 #define total_tiles_used 512	/*hack, guess  */
 
-#define DEF_TILE_WIDTH		8
-#define DEF_TILE_HEIGHT		8
-#define DEF_TILE_FILE		"lib/xtra/graf/8x8.bmp"
 #define DEF_TILES_PER_ROW       32
 
 /* don't change these */
-u16b TILE_WIDTH;
-u16b TILE_HEIGHT;
-char *TILE_FILE;
-u16b NDS_SCREEN_COLS;
-u16b NDS_SCREEN_ROWS;
+#define TILE_WIDTH 3
+#define TILE_HEIGHT 8
 #define c1(a,i)		(RGB15((a[i]>>3),(a[i+1]>>3),(a[i+2]>>3)))
 #define c2(a,i)		(RGB15((a[i+2]>>3),(a[i+1]>>3),(a[i]>>3)))
 #define TILE_BUFFER_SIZE		(TILE_WIDTH*TILE_HEIGHT*(total_tiles_used+1)*2)
@@ -373,7 +365,7 @@ void do_vblank() {
           put_key_event(k2d[i + 4]);
         }
       }
-	  }
+    }
   }
   
   /* --------------------------- */
@@ -384,8 +376,6 @@ void do_vblank() {
   /*  Check for typing on the touchscreen kbd */
   // TODO code of checking keyboard
 }
-
-/*END JUST MOVED */
 
 /*
  * An event handler XXX XXX XXX
@@ -420,7 +410,9 @@ static errr CheckEvents(bool wait) {
     return (1);
   } else {
     /* Key */
-    Term_keypress(EVENT_C(e), 0);
+    INFO_PRINT("Change:%c", EVENT_C(e));
+    Term_keypress('\n', 0);
+//    Term_keypress(EVENT_C(e), 0);
   }
 
   return (0);
@@ -443,13 +435,12 @@ static errr CheckEvents(bool wait) {
  * handled, and non-zero if the action is unknown or incorrectly handled.
  */
 static errr Term_xtra_nds(int n, int v) {
-//  nds_raw_print("Term_xtra_nds");
-//  nds_raw_print(n);
   term_data *td = (term_data*)(Term->data);
   
   /* Analyze */
   switch (n) {
     case TERM_XTRA_EVENT: {
+      INFO_PRINT("Xevent[v=%d]", v);
       /*
        * Process some pending events
        */
@@ -457,6 +448,7 @@ static errr Term_xtra_nds(int n, int v) {
     }
       
     case TERM_XTRA_FLUSH: {
+      INFO_PRINT("Xflush[v=%d]", v);
       /*
        * Flush all pending events
        */
@@ -466,6 +458,7 @@ static errr Term_xtra_nds(int n, int v) {
     }
       
     case TERM_XTRA_CLEAR: {
+      INFO_PRINT("Xclear[v=%d]", v);
       /*
        * Clear the entire window
        */
@@ -490,6 +483,7 @@ static errr Term_xtra_nds(int n, int v) {
     }
       
     case TERM_XTRA_SHAPE: {
+      INFO_PRINT("Xshape[v=%d]", v);
       /*
        * Set the cursor visibility XXX XXX XXX
        *
@@ -504,14 +498,16 @@ static errr Term_xtra_nds(int n, int v) {
     }
       
     case TERM_XTRA_FROSH: {
-	    return (0);
+      return (0);
     }
       
     case TERM_XTRA_FRESH: {
-	    return (0);
+      INFO_PRINT("Xfresh[v=%d]", v);
+      return (0);
     }
       
     case TERM_XTRA_NOISE: {
+      INFO_PRINT("Xnoise[v=%d]", v);
       /*
        * Make a noise XXX XXX XXX
        *
@@ -524,6 +520,7 @@ static errr Term_xtra_nds(int n, int v) {
     }
       
     case TERM_XTRA_BORED: {
+      INFO_PRINT("Xbored[v=%d]", v);
       /*
        * Handle random events when bored
        */
@@ -531,6 +528,7 @@ static errr Term_xtra_nds(int n, int v) {
     }
       
     case TERM_XTRA_REACT: {
+      INFO_PRINT("Xreact[v=%d]", v);
       /*
        * React to global changes XXX XXX XXX
        *
@@ -546,6 +544,7 @@ static errr Term_xtra_nds(int n, int v) {
     }
       
     case TERM_XTRA_ALIVE: {
+      INFO_PRINT("Xalive[v=%d]", v);
       /*
        * Change the "hard" level XXX XXX XXX
        *
@@ -564,6 +563,7 @@ static errr Term_xtra_nds(int n, int v) {
     }
       
     case TERM_XTRA_LEVEL: {
+      INFO_PRINT("Xlevel[v=%d]", v);
       /*
        * Change the "soft" level XXX XXX XXX
        *
@@ -584,6 +584,7 @@ static errr Term_xtra_nds(int n, int v) {
     }
       
     case TERM_XTRA_DELAY: {
+      INFO_PRINT("Xdelay[v=%d]", v);
       /*
        * Delay for some milliseconds
        */
@@ -595,7 +596,8 @@ static errr Term_xtra_nds(int n, int v) {
       return (0);
     }
   }
-  
+
+  INFO_PRINT("Xunknown[n=%d,v=%d]", n, v);
   /* Unknown or Unhandled action */
   return (1);
 }
@@ -605,7 +607,8 @@ static errr Term_xtra_nds(int n, int v) {
  * Display the cursor
  */
 static errr Term_curs_nds(int x, int y) {
-//  nds_raw_print("Term_curs_nds");
+  INFO_PRINT("curs[x=%d,y=%d]", x, y);
+
   u32b vram_offset = (y - 1) * TILE_HEIGHT * 256 + x * TILE_WIDTH + 8 * 256;
   byte xx, yy;
   for (xx = 0; xx < TILE_WIDTH; xx++) {
@@ -622,8 +625,9 @@ static errr Term_curs_nds(int x, int y) {
 }
 
 
-void draw_char(byte x, byte y, char c) {
-  u32b vram_offset = (y & 0x1F) * 8 * 256 + x * 3, tile_offset = c * 24;
+void draw_char(byte x, byte y, wchar_t c) {
+  u32b vram_offset = (y & 0x1F) * TILE_WIDTH * 256 + x * TILE_HEIGHT;
+  u32b tile_offset = c * 24;
   u16b* fb = BG_GFX;
   const u16b* chardata = top_font_bin;
   // TODO what is this doing?
@@ -632,16 +636,17 @@ void draw_char(byte x, byte y, char c) {
     chardata = btm_font_bin;
   }
   byte xx, yy;
-  for (yy = 0; yy < 8; yy++) {
-    for (xx = 0; xx < 3; xx++) {
+  for (yy = 0; yy < TILE_HEIGHT; yy++) {
+    for (xx = 0; xx < TILE_WIDTH; xx++) {
       fb[yy * 256 + xx + vram_offset]
           = chardata[yy * 3 + xx + tile_offset] | BIT(15);
     }
   }
 }
 
-void draw_color_char(byte x, byte y, char c, byte clr) {
-  u32b vram_offset = (y & 0x1F) * 8 * 256 + x * 3, tile_offset = c * 24;
+void draw_color_char(byte x, byte y, wchar_t c, byte clr) {
+  u32b vram_offset = (y & 0x1F) * TILE_HEIGHT * 256 + x * TILE_WIDTH;
+  u32b tile_offset = c * 24;
   u16b* fb = BG_GFX;
   const u16b* chardata = top_font_bin;
   // TODO what is this doing?
@@ -652,8 +657,8 @@ void draw_color_char(byte x, byte y, char c, byte clr) {
   byte xx, yy;
   u16b val;
   u16b fgc = color_data[clr & 0xF];
-  for (yy = 0; yy < 8; yy++) {
-    for (xx = 0;xx < 3; xx++) {
+  for (yy = 0; yy < TILE_HEIGHT; yy++) {
+    for (xx = 0;xx < TILE_WIDTH; xx++) {
       val = (chardata[yy * 3 + xx + tile_offset]);
       fb[yy * 256 + xx + vram_offset] = (val & fgc) | BIT(15);
     }
@@ -668,18 +673,19 @@ void draw_color_char(byte x, byte y, char c, byte clr) {
  * You may assume "valid" input if the window is properly sized.
  */
 static errr Term_wipe_nds(int x, int y, int n) {
-//  nds_raw_print("Term_wipe_nds");
-	term_data *td = (term_data*)(Term->data);
+//  INFO_PRINT("wipe[x=%d,y=%d,n=%d]", x, y, n);
 
-	int i;
+  term_data *td = (term_data*)(Term->data);
 
-	/* Draw a blank */
-	for (i = 0; i < n; i++) {
+  int i;
+
+  /* Draw a blank */
+  for (i = 0; i < n; i++) {
     draw_color_char(x + i, y, 0, 0);
   }
 
-	/* Success */
-	return (0);
+  /* Success */
+  return (0);
 }
 
 
@@ -715,23 +721,20 @@ static errr Term_wipe_nds(int x, int y, int n) {
  * the "always_text" flag is set, if this flag is not set, all the
  * "black" text will be handled by the "Term_wipe_xxx()" hook.
  */
-static errr Term_text_nds(int x, int y, int n, byte a, const char *cp) {
-//  nds_raw_print("Term_text_nds");
-//  nds_raw_print(cp);
+static errr Term_text_nds(int x, int y, int n, byte a, const wchar_t *cp) {
+//  INFO_PRINT("text[x=%d,y=%d,n=%d,a=%c,cp=%s]", x, y, n, a, cp);
+
   int i;
   
   /* Do nothing if the string is null */
   if (!cp || !*cp) return (-1);
   
-  /* Get the length of the string */
-  if ((n > strlen(cp)) || (n < 0)) n = strlen(cp);
-
   /* Put the characters directly */
-  for (i = 0; i < n, *cp; i++) {
+  for (i = 0; i < n; i++) {
     /* Check it's the right attr */
     if ((x + i < Term->wid) && (Term->scr->a[y][x + i] == a)) {
       /* Put the char */
-      draw_color_char(x + i, y, (*(cp++)), a);
+      draw_color_char(x + i, y, cp[i], a);
     } else {
       break;
     }
@@ -741,19 +744,19 @@ static errr Term_text_nds(int x, int y, int n, byte a, const char *cp) {
 }
 
 
-void draw_tile(byte x, byte y, u16b tile) {
-  u32b vram_offset = (y & 0x7F) * TILE_HEIGHT * 256 + x * TILE_WIDTH + 
-    8 * 256, 
-    tile_offset = (tile & 0x7FFF) * TILE_WIDTH * TILE_HEIGHT;
-  u16b* fb = BG_GFX;
-  byte xx, yy;
-  for (yy = 0; yy < TILE_HEIGHT; yy++) {
-    for (xx = 0; xx < TILE_WIDTH; xx++) {
-      fb[yy * 256 + xx + vram_offset] =
-          tiles_bin[yy * TILE_WIDTH + xx + tile_offset] | BIT(15);
-    }
-  }
-}
+//void draw_tile(byte x, byte y, u16b tile) {
+//  u32b vram_offset = (y & 0x7F) * TILE_HEIGHT * 256 + x * TILE_WIDTH +
+//    8 * 256,
+//    tile_offset = (tile & 0x7FFF) * TILE_WIDTH * TILE_HEIGHT;
+//  u16b* fb = BG_GFX;
+//  byte xx, yy;
+//  for (yy = 0; yy < TILE_HEIGHT; yy++) {
+//    for (xx = 0; xx < TILE_WIDTH; xx++) {
+//      fb[yy * 256 + xx + vram_offset] =
+//          tiles_bin[yy * TILE_WIDTH + xx + tile_offset] | BIT(15);
+//    }
+//  }
+//}
 
 /*
  * Draw some attr/char pairs on the screen
@@ -781,24 +784,26 @@ void draw_tile(byte x, byte y, u16b tile) {
  * This function is only used if one of the "higher_pict" and/or
  * "always_pict" flags are set.
  */
-static errr Term_pict_nds(int x, int y, int n, const byte *ap, const char *cp) {
-//  nds_raw_print("Term_pict_nds");
-	term_data *td = (term_data*)(Term->data);
-	u16b tile_number = DEF_TILES_PER_ROW * (*ap - 0x80) + (*cp - 0x80); 
-	/* XXX XXX XXX */
+static errr Term_pict_nds(int x, int y, int n, const byte *ap, const wchar_t *cp,
+                          const int *tap, const int *tcp) {
+  INFO_PRINT("pict[x=%d,y=%d,n=%d,ap=%s,cp=%s]", x, y, n, ap, cp);
 
-	int i;
-	
-	/* Put the characters directly */
-	for (i = 0; i < n, *cp; i++) {
-	    if ((x + i < Term->wid) && (*cp != '\0')) {
-        draw_tile(x + i, y, tile_number);
-      } else {
-	      break;
-	    }
-	  }
-	/* Success */
-	return (0);
+  term_data *td = (term_data*)(Term->data);
+  u16b tile_number = DEF_TILES_PER_ROW * (*ap - 0x80) + (*cp - 0x80);
+  /* XXX XXX XXX */
+
+  int i;
+
+  /* Put the characters directly */
+  for (i = 0; i < n, *cp; i++) {
+    if ((x + i < Term->wid) && (*cp != '\0')) {
+//      draw_tile(x + i, y, tile_number);
+    } else {
+      break;
+    }
+  }
+  /* Success */
+  return (0);
 }
 
 
@@ -893,9 +898,9 @@ errr init_nds(void) {
   td = &data[0];
   memset(td, 0, sizeof(term_data));
   td->rows = 24;
-  td->cols = 37;
-  td->tile_height = 8;
-  td->tile_width = 3;
+  td->cols = 85; // PAW: originally 37. why?
+  td->tile_height = TILE_HEIGHT;
+  td->tile_width = TILE_WIDTH;
         
    /* Create windows (backwards!) */
   for (i = MAX_TERM_DATA - 1; i >= 0; i--) {
@@ -954,37 +959,7 @@ void nds_init_fonts() {
 /* if you are calling this function, not much should be happening after */
 /* since it clobbers the font pointers */
 void nds_fatal_err(const char* msg) {
-  static byte x = 2, y = 1;
-  byte i = 0;
-  /*top_font_bin = btm_font_bin = &ds_subfont[0]; */
-  /*	x = 2; */
-  /*	y = 1; */
-  for (i = 0; msg[i] != '\0'; i++) {
-    draw_char( x, y, msg[i]);
-    x++;
-    if (msg[i] == '\n' || x > 80) {
-      x = 2;
-      y++;
-    }
-  }
-}
-
-/*should be replaced with open and read from z-file.c */
-bool nds_load_file(const char* name, u16b* dest, u32b len) {
-  FILE* f = fopen(name,"r");
-  if (f == NULL) return false;
-  u16b readbuf[1024];
-  u32b i,l,wi=0;
-  if (len == 0) len = 0xffffffff;	/* max possible len */
-  for (i=0;i<1024;i++) readbuf[i] = 0;
-  while ((l=fread(readbuf,2,1024,f)) > 0 && wi*2 < len) {
-    for (i = 0; i < (l) && wi * 2 < len; i++) {	/* 0 to l/2 */
-	    dest[wi++] = readbuf[i];
-    }
-    for (i = 0; i < 1024; i++) readbuf[i] = 0;
-  }
-  fclose(f);
-  return true;
+  DEBUG_PRINT("Fatal error: %s\n", msg);
 }
 
 void nds_init_buttons() {
@@ -1077,31 +1052,17 @@ static void hook_quit(const char *str) {
 int main(int argc, char *argv[]) {
   /* Initialize the machine itself  */
 
-  srand(time(NULL));
-
   enable_interrupts();
-
-  consoleDemoInit();
-
-  DEBUG_PRINT("Debug testing!\n");
-
-//  nds_show_debug_console();
-
-  Keyboard *kbd = keyboardDemoInit();
-  keyboardShow();
-
-  // TODO handler for key events
-//  kbd->OnKeyPressed = OnKeyPressed;
-
 
   // TODO perhaps change later -- MODE_0 DISPLAY_0 is probably fine
   videoSetMode(MODE_5_2D | DISPLAY_BG2_ACTIVE);
 
-  vramSetBankA(VRAM_A_MAIN_BG_0x06000000); /* BG2, event buf, fonts */
-  vramSetBankB(VRAM_B_MAIN_BG_0x06020000);       /* for storage (tileset) */
-  vramSetBankD(VRAM_D_MAIN_BG_0x06040000);       /* for storage (tileset) */
-  vramSetBankE(VRAM_E_LCD);	/* for storage (WIN_TEXT) */
-  vramSetBankF(VRAM_F_LCD);	/* for storage (WIN_TEXT) */
+  vramSetBankA(VRAM_A_MAIN_BG);       /* BG2, event buf, fonts */
+  vramSetBankB(VRAM_B_MAIN_BG);       /* for storage (tileset) */
+  vramSetBankB(VRAM_C_SUB_BG);
+  vramSetBankD(VRAM_D_MAIN_BG);       /* for storage (tileset) */
+  vramSetBankE(VRAM_E_LCD);	      /* for storage (WIN_TEXT) */
+  vramSetBankF(VRAM_F_LCD);           /* for storage (WIN_TEXT) */
 
   REG_BG2CNT = BG_BMP16_256x256;
   REG_BG2PA = 1<<8;
@@ -1110,6 +1071,16 @@ int main(int argc, char *argv[]) {
   REG_BG2PD = 1<<8;
   REG_BG2Y = 0;
   REG_BG2X = 0;
+
+  consoleDemoInit();
+  INFO_PRINT("Debug testing!\n");
+//  nds_show_debug_console();
+
+  Keyboard *kbd = keyboardDemoInit();
+//  keyboardShow();
+
+  // TODO handler for key events
+//  kbd->OnKeyPressed = OnKeyPressed;
 
   nds_init_fonts();
   
@@ -1129,9 +1100,6 @@ int main(int argc, char *argv[]) {
 
   nds_init_buttons();
 
-  TILE_HEIGHT = 8;
-  TILE_WIDTH = 3;
-
   /* Activate hooks */
   plog_aux = hook_plog;
   quit_aux = hook_quit;
@@ -1139,41 +1107,47 @@ int main(int argc, char *argv[]) {
   /* Initialize the windows */
   if (init_nds()) quit("Oops!");
 
+  swiWaitForVBlank();
+
   /* XXX XXX XXX */
   ANGBAND_SYS = "nds";
   
   /* Initialize some stuff */
   init_stuff();
+//
+//  draw_tile(2, 2, 5);
+//  draw_tile(4, 2, 15);
+//  draw_tile(6, 2, 25);
+//  draw_tile(8, 2, 35);
 
-  draw_tile(2, 2, 5);
-  draw_tile(4, 2, 15);
-  draw_tile(6, 2, 25);
-  draw_tile(8, 2, 35);
+  INFO_PRINT("Before init_display()\n");
+  init_display();
+  INFO_PRINT("Before init_display()\n");
 
-  while (true) {
-      DEBUG_PRINT("Before init_angband()\n");
-      /* Initialize */
-      init_angband();
-      DEBUG_PRINT("After init_angband()\n");
+  INFO_PRINT("Before init_angband()\n");
+  /* Initialize */
+  init_angband();
+  INFO_PRINT("After init_angband()\n");
 
-      for (int i = 0; i < 50; i++) {
-        draw_tile(i % 10, i / 10, i + 600);
-      }
-      /* Wait for response */
+  swiWaitForVBlank();
 
-      DEBUG_PRINT("Before pause_line()\n");
-      pause_line(Term);
-      DEBUG_PRINT("After pause_line()\n");
+//      for (int i = 0; i < 50; i++) {
+//        draw_tile(i % 10, i / 10, i + 600);
+//      }
+  /* Wait for response */
 
-      DEBUG_PRINT("Before play_game()\n");
-      /* Play the game */
-      play_game(true);
-      DEBUG_PRINT("After play_game()\n");
+  INFO_PRINT("Before pause_line()\n");
+  pause_line(Term);
+  INFO_PRINT("After pause_line()\n");
 
-      /* Free resources */
-      cleanup_angband();
-  }
-  
+  INFO_PRINT("Before play_game()\n");
+  /* Play the game */
+  play_game(true);
+  INFO_PRINT("After play_game()\n");
+
+  /* Free resources */
+  cleanup_angband();
+
   /* Quit */
   quit(NULL);
   
