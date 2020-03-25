@@ -1787,7 +1787,7 @@ static errr Term_xtra_win_clear(void)
 
 	/* Erase it */
 	hdc = GetDC(td->w);
-	SetBkColor(hdc, RGB(0, 0, 0));
+	SetBkColor(hdc, win_clr[COLOUR_DARK]);
 	SelectObject(hdc, td->font_id);
 	ExtTextOut(hdc, 0, 0, ETO_OPAQUE, &rc, NULL, 0, NULL);
 	ReleaseDC(td->w, hdc);
@@ -1972,7 +1972,7 @@ static errr Term_wipe_win(int x, int y, int n)
 	rc.bottom = rc.top + td->tile_hgt;
 
 	hdc = GetDC(td->w);
-	SetBkColor(hdc, RGB(0, 0, 0));
+	SetBkColor(hdc, win_clr[COLOUR_DARK]);
 	SelectObject(hdc, td->font_id);
 	ExtTextOut(hdc, 0, 0, ETO_OPAQUE, &rc, NULL, 0, NULL);
 	ReleaseDC(td->w, hdc);
@@ -2009,7 +2009,7 @@ static errr Term_text_win(int x, int y, int n, int a, const wchar_t *s)
 	hdc = GetDC(td->w);
 
 	/* Background color */
-	SetBkColor(hdc, RGB(0, 0, 0));
+	SetBkColor(hdc, win_clr[COLOUR_DARK]);
 
 	/* Foreground color */
 	if (colors16) {
@@ -2025,7 +2025,7 @@ static errr Term_text_win(int x, int y, int n, int a, const wchar_t *s)
 		{
 			case BG_BLACK:
 				/* Default Background */
-				SetBkColor(hdc, win_clr[0]);
+				SetBkColor(hdc, win_clr[COLOUR_DARK]);
 				break;
 			case BG_SAME:
 				/* Background same as foreground*/
