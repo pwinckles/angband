@@ -30,15 +30,3 @@ keymap-input:0:\xdf
 keymap-act:.7
 keymap-input:0:\xc1
 
-keymap-act:.6
-keymap-input:0:[Right]
-
-keymap-act:.4
-keymap-input:0:[Left]
-
-keymap-act:.2
-keymap-input:0:[Down]
-
-keymap-act:.8
-keymap-input:0:[Up]
-
